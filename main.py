@@ -29,7 +29,7 @@ EXPENSE_TABLE = "expense"
 # BigQuery client dependency
 # -------------------------------------------------------------------
 def get_bq_client():
-    client = bigquery.Client()
+    client = bigquery.Client(project=gen-lang-client-0413676114)
     try:
         yield client
     finally:
