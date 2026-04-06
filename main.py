@@ -4,7 +4,6 @@ from google.cloud import bigquery
 from pydantic import BaseModel
 from typing import Optional
 
-
 app = FastAPI()
 
 # Allow frontend requests
@@ -18,10 +17,6 @@ app.add_middleware(
 
 PROJECT_ID = "gen-lang-client-0413676114"
 DATASET = "property_mgmt"
-
-# IMPORTANT:
-# If your table is named "expense" in BigQuery, keep this as "expense".
-# If your table is named "expenses", change it below.
 EXPENSE_TABLE = "expense"
 
 
@@ -29,7 +24,7 @@ EXPENSE_TABLE = "expense"
 # BigQuery client dependency
 # -------------------------------------------------------------------
 def get_bq_client():
-    client = bigquery.Client(project=gen-lang-client-0413676114)
+    client = bigquery.Client(project=PROJECT_ID)
     try:
         yield client
     finally:
@@ -248,10 +243,10 @@ def create_income_record(
 
 
 # -------------------------------------------------------------------
-# Expenses
+# Expense
 # -------------------------------------------------------------------
-@app.get("/expenses/{property_id}")
-def get_expenses_by_property(property_id: int, bq: bigquery.Client = Depends(get_bq_client)):
+@app.get("/expense/{property_id}")
+def get_expense_by_property(property_id: int, bq: bigquery.Client = Depends(get_bq_client)):
     check_query = f"""
         SELECT property_id
         FROM `{PROJECT_ID}.{DATASET}.properties`
@@ -299,7 +294,7 @@ def get_expenses_by_property(property_id: int, bq: bigquery.Client = Depends(get
         )
 
 
-@app.post("/expenses/{property_id}")
+@app.post("/expense/{property_id}")
 def create_expense_record(
     property_id: int,
     expense: ExpenseCreate,
@@ -411,9 +406,9 @@ def get_total_income(property_id: int, bq: bigquery.Client = Depends(get_bq_clie
         )
 
 
-# 2. Total Expenses
-@app.get("/properties/{property_id}/total-expenses")
-def get_total_expenses(property_id: int, bq: bigquery.Client = Depends(get_bq_client)):
+# 2. Total Expense
+@app.get("/properties/{property_id}/total-expense")
+def get_total_expense(property_id: int, bq: bigquery.Client = Depends(get_bq_client)):
     check_query = f"""
         SELECT property_id
         FROM `{PROJECT_ID}.{DATASET}.properties`
@@ -421,7 +416,7 @@ def get_total_expenses(property_id: int, bq: bigquery.Client = Depends(get_bq_cl
     """
 
     expense_query = f"""
-        SELECT SUM(amount) AS total_expenses
+        SELECT SUM(amount) AS total_expense
         FROM `{PROJECT_ID}.{DATASET}.{EXPENSE_TABLE}`
         WHERE property_id = @property_id
     """
@@ -441,11 +436,11 @@ def get_total_expenses(property_id: int, bq: bigquery.Client = Depends(get_bq_cl
             )
 
         results = list(bq.query(expense_query, job_config=job_config).result())
-        total_expenses = results[0]["total_expenses"] if results else 0
+        total_expense = results[0]["total_expense"] if results else 0
 
         return {
             "property_id": property_id,
-            "total_expenses": total_expenses if total_expenses is not None else 0
+            "total_expense": total_expense if total_expense is not None else 0
         }
 
     except HTTPException:
@@ -473,7 +468,7 @@ def get_net_profit(property_id: int, bq: bigquery.Client = Depends(get_bq_client
     """
 
     expense_query = f"""
-        SELECT SUM(amount) AS total_expenses
+        SELECT SUM(amount) AS total_expense
         FROM `{PROJECT_ID}.{DATASET}.{EXPENSE_TABLE}`
         WHERE property_id = @property_id
     """
@@ -496,16 +491,16 @@ def get_net_profit(property_id: int, bq: bigquery.Client = Depends(get_bq_client
         expense_result = list(bq.query(expense_query, job_config=job_config).result())
 
         total_income = income_result[0]["total_income"] if income_result else 0
-        total_expenses = expense_result[0]["total_expenses"] if expense_result else 0
+        total_expense = expense_result[0]["total_expense"] if expense_result else 0
 
         total_income = total_income if total_income is not None else 0
-        total_expenses = total_expenses if total_expenses is not None else 0
+        total_expense = total_expense if total_expense is not None else 0
 
         return {
             "property_id": property_id,
             "total_income": total_income,
-            "total_expenses": total_expenses,
-            "net_profit": total_income - total_expenses
+            "total_expense": total_expense,
+            "net_profit": total_income - total_expense
         }
 
     except HTTPException:
