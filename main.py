@@ -359,3 +359,196 @@ def create_expense_record(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Insert failed: {str(e)}"
         )
+
+
+# -------------------------------------------------------------------
+# Additional Endpoints
+# -------------------------------------------------------------------
+
+# 1. Total Income
+@app.get("/properties/{property_id}/total-income")
+def get_total_income(property_id: int, bq: bigquery.Client = Depends(get_bq_client)):
+    check_query = f"""
+        SELECT property_id
+        FROM `{PROJECT_ID}.{DATASET}.properties`
+        WHERE property_id = @property_id
+    """
+
+    total_income_query = f"""
+        SELECT SUM(amount) AS total_income
+        FROM `{PROJECT_ID}.{DATASET}.income`
+        WHERE property_id = @property_id
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("property_id", "INT64", property_id)
+        ]
+    )
+
+    try:
+        property_results = list(bq.query(check_query, job_config=job_config).result())
+        if not property_results:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Property not found"
+            )
+
+        results = list(bq.query(total_income_query, job_config=job_config).result())
+        total_income = results[0]["total_income"] if results else 0
+
+        return {
+            "property_id": property_id,
+            "total_income": total_income if total_income is not None else 0
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+# 2. Total Expenses
+@app.get("/properties/{property_id}/total-expenses")
+def get_total_expenses(property_id: int, bq: bigquery.Client = Depends(get_bq_client)):
+    check_query = f"""
+        SELECT property_id
+        FROM `{PROJECT_ID}.{DATASET}.properties`
+        WHERE property_id = @property_id
+    """
+
+    expense_query = f"""
+        SELECT SUM(amount) AS total_expenses
+        FROM `{PROJECT_ID}.{DATASET}.{EXPENSE_TABLE}`
+        WHERE property_id = @property_id
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("property_id", "INT64", property_id)
+        ]
+    )
+
+    try:
+        property_results = list(bq.query(check_query, job_config=job_config).result())
+        if not property_results:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Property not found"
+            )
+
+        results = list(bq.query(expense_query, job_config=job_config).result())
+        total_expenses = results[0]["total_expenses"] if results else 0
+
+        return {
+            "property_id": property_id,
+            "total_expenses": total_expenses if total_expenses is not None else 0
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+# 3. Net Profit
+@app.get("/properties/{property_id}/net-profit")
+def get_net_profit(property_id: int, bq: bigquery.Client = Depends(get_bq_client)):
+    check_query = f"""
+        SELECT property_id
+        FROM `{PROJECT_ID}.{DATASET}.properties`
+        WHERE property_id = @property_id
+    """
+
+    income_query = f"""
+        SELECT SUM(amount) AS total_income
+        FROM `{PROJECT_ID}.{DATASET}.income`
+        WHERE property_id = @property_id
+    """
+
+    expense_query = f"""
+        SELECT SUM(amount) AS total_expenses
+        FROM `{PROJECT_ID}.{DATASET}.{EXPENSE_TABLE}`
+        WHERE property_id = @property_id
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("property_id", "INT64", property_id)
+        ]
+    )
+
+    try:
+        property_results = list(bq.query(check_query, job_config=job_config).result())
+        if not property_results:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Property not found"
+            )
+
+        income_result = list(bq.query(income_query, job_config=job_config).result())
+        expense_result = list(bq.query(expense_query, job_config=job_config).result())
+
+        total_income = income_result[0]["total_income"] if income_result else 0
+        total_expenses = expense_result[0]["total_expenses"] if expense_result else 0
+
+        total_income = total_income if total_income is not None else 0
+        total_expenses = total_expenses if total_expenses is not None else 0
+
+        return {
+            "property_id": property_id,
+            "total_income": total_income,
+            "total_expenses": total_expenses,
+            "net_profit": total_income - total_expenses
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+# 4. Properties by City
+@app.get("/properties/city/{city}")
+def get_properties_by_city(city: str, bq: bigquery.Client = Depends(get_bq_client)):
+    query = f"""
+        SELECT *
+        FROM `{PROJECT_ID}.{DATASET}.properties`
+        WHERE LOWER(city) = LOWER(@city)
+        ORDER BY property_id
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("city", "STRING", city)
+        ]
+    )
+
+    try:
+        results = bq.query(query, job_config=job_config).result()
+        properties = [dict(row) for row in results]
+
+        if not properties:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No properties found for this city"
+            )
+
+        return properties
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
