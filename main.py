@@ -512,33 +512,43 @@ def get_net_profit(property_id: int, bq: bigquery.Client = Depends(get_bq_client
         )
 
 
-# 4. Properties by City
-@app.get("/properties/city/{city}")
-def get_properties_by_city(city: str, bq: bigquery.Client = Depends(get_bq_client)):
-    query = f"""
-        SELECT *
+# 4. Average Expense
+@app.get("/properties/{property_id}/average-expense")
+def get_average_expense(property_id: int, bq: bigquery.Client = Depends(get_bq_client)):
+
+    check_query = f"""
+        SELECT property_id
         FROM `{PROJECT_ID}.{DATASET}.properties`
-        WHERE LOWER(city) = LOWER(@city)
-        ORDER BY property_id
+        WHERE property_id = @property_id
+    """
+
+    avg_query = f"""
+        SELECT AVG(amount) AS avg_expense
+        FROM `{PROJECT_ID}.{DATASET}.{EXPENSE_TABLE}`
+        WHERE property_id = @property_id
     """
 
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
-            bigquery.ScalarQueryParameter("city", "STRING", city)
+            bigquery.ScalarQueryParameter("property_id", "INT64", property_id)
         ]
     )
 
     try:
-        results = bq.query(query, job_config=job_config).result()
-        properties = [dict(row) for row in results]
-
-        if not properties:
+        property_results = list(bq.query(check_query, job_config=job_config).result())
+        if not property_results:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No properties found for this city"
+                detail="Property not found"
             )
 
-        return properties
+        results = list(bq.query(avg_query, job_config=job_config).result())
+        avg_expense = results[0]["avg_expense"] if results else 0
+
+        return {
+            "property_id": property_id,
+            "average_expense": avg_expense if avg_expense is not None else 0
+        }
 
     except HTTPException:
         raise
