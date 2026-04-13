@@ -4,6 +4,16 @@ from google.cloud import bigquery
 from pydantic import BaseModel
 from typing import Optional
 
+class PropertyInput(BaseModel):
+    name: Optional[str] = None
+    address: str
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    property_type: str
+    tenant_name: Optional[str] = None
+    monthly_rent: float
+
 app = FastAPI()
 
 # Allow frontend requests
@@ -557,3 +567,112 @@ def get_average_expense(property_id: int, bq: bigquery.Client = Depends(get_bq_c
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+#add
+@app.post("/properties")
+def create_property(property_data: PropertyInput):
+    client = bigquery.Client()
+
+    query = """
+    INSERT INTO `gen-lang-client-0413676114.property_mgmt.properties`
+    (name, address, city, state, postal_code, property_type, tenant_name, monthly_rent)
+    VALUES
+    (@name, @address, @city, @state, @postal_code, @property_type, @tenant_name, @monthly_rent)
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("name", "STRING", property_data.name),
+            bigquery.ScalarQueryParameter("address", "STRING", property_data.address),
+            bigquery.ScalarQueryParameter("city", "STRING", property_data.city),
+            bigquery.ScalarQueryParameter("state", "STRING", property_data.state),
+            bigquery.ScalarQueryParameter("postal_code", "STRING", property_data.postal_code),
+            bigquery.ScalarQueryParameter("property_type", "STRING", property_data.property_type),
+            bigquery.ScalarQueryParameter("tenant_name", "STRING", property_data.tenant_name),
+            bigquery.ScalarQueryParameter("monthly_rent", "FLOAT64", property_data.monthly_rent),
+        ]
+    )
+
+    client.query(query, job_config=job_config).result()
+    return {"message": "Property created successfully"}
+
+
+#add
+@app.put("/properties/{property_id}")
+def update_property(property_id: int, property_data: PropertyInput):
+    client = bigquery.Client()
+
+    query = """
+    UPDATE `gen-lang-client-0413676114.property_mgmt.properties`
+    SET
+        name = @name,
+        address = @address,
+        city = @city,
+        state = @state,
+        postal_code = @postal_code,
+        property_type = @property_type,
+        tenant_name = @tenant_name,
+        monthly_rent = @monthly_rent
+    WHERE property_id = @property_id
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("property_id", "INT64", property_id),
+            bigquery.ScalarQueryParameter("name", "STRING", property_data.name),
+            bigquery.ScalarQueryParameter("address", "STRING", property_data.address),
+            bigquery.ScalarQueryParameter("city", "STRING", property_data.city),
+            bigquery.ScalarQueryParameter("state", "STRING", property_data.state),
+            bigquery.ScalarQueryParameter("postal_code", "STRING", property_data.postal_code),
+            bigquery.ScalarQueryParameter("property_type", "STRING", property_data.property_type),
+            bigquery.ScalarQueryParameter("tenant_name", "STRING", property_data.tenant_name),
+            bigquery.ScalarQueryParameter("monthly_rent", "FLOAT64", property_data.monthly_rent),
+        ]
+    )
+
+    client.query(query, job_config=job_config).result()
+    return {"message": "Property updated successfully"}
+
+@app.delete("/properties/{property_id}")
+def delete_property(property_id: int):
+    client = bigquery.Client()
+
+    delete_income_query = """
+    DELETE FROM `gen-lang-client-0413676114.property_mgmt.income`
+    WHERE property_id = @property_id
+    """
+
+    delete_expense_query = """
+    DELETE FROM `gen-lang-client-0413676114.property_mgmt.expense`
+    WHERE property_id = @property_id
+    """
+
+    delete_property_query = """
+    DELETE FROM `gen-lang-client-0413676114.property_mgmt.properties`
+    WHERE property_id = @property_id
+    """
+
+    income_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("property_id", "INT64", property_id)
+        ]
+    )
+
+    expense_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("property_id", "INT64", property_id)
+        ]
+    )
+
+    property_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("property_id", "INT64", property_id)
+        ]
+    )
+
+    client.query(delete_income_query, job_config=income_config).result()
+    client.query(delete_expense_query, job_config=expense_config).result()
+    client.query(delete_property_query, job_config=property_config).result()
+
+    return {"message": "Property and related records deleted successfully"}
+
